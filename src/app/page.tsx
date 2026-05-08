@@ -27,7 +27,7 @@ export default function Home() {
       <header style={{ padding: '18px 20px', borderBottom: '1px solid #f0f3f9', display: 'flex', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontWeight: 800, fontSize: '1.4rem', letterSpacing: '-0.02em', lineHeight: 1 }}>EVENTCORE</div>
-          <div style={{ fontSize: '0.6rem', fontWight: 600, letterSpacing: '3px', color: '#2563eb' }}>AFRICA LIMITED</div>
+          <div style={{ fontSize: '0.6rem', fontWeight: 600, letterSpacing: '3px', color: '#2563eb' }}>AFRICA LIMITED</div>
         </div>
       </header>
 
