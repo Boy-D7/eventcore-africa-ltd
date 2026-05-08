@@ -5,62 +5,53 @@ import { supabase } from '@/lib/supabase';
 export default function Home() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [debugError, setDebugError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchEvents() {
-      const { data, error } = await supabase
-        .from('events')
-        .select(`
-          *,
-          ticket_tiers (*)
-        `)
-        .eq('is_active', true);
-      
-      if (data) setEvents(data);
-      setLoading(false);
+      try {
+        console.log("Checking Supabase connection...");
+        const { data, error } = await supabase
+          .from('events')
+          .select('*')
+          .eq('is_active', true);
+        
+        if (error) {
+          console.error("Supabase Error:", error);
+          setDebugError(error.message);
+        } else {
+          console.log("Data received:", data);
+          setEvents(data || []);
+        }
+      } catch (err: any) {
+        setDebugError(err.message);
+      } finally {
+        setLoading(false);
+      }
     }
     fetchEvents();
   }, []);
 
   return (
-    <div className="app" style={{ fontFamily: 'Inter, sans-serif', maxWidth: '480px', margin: '0 auto', background: 'white', minHeight: '100vh' }}>
-      <header style={{ padding: '18px 20px', borderBottom: '1px solid #f0f3f9', display: 'flex', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontWeight: 800, fontSize: '1.4rem', letterSpacing: '-0.02em', lineHeight: 1 }}>EVENTCORE</div>
-          <div style={{ fontSize: '0.6rem', fontWeight: 600, letterSpacing: '3px', color: '#2563eb' }}>AFRICA LIMITED</div>
-        </div>
+    <div style={{ maxWidth: '480px', margin: '0 auto', fontFamily: 'sans-serif' }}>
+      <header style={{ padding: '20px', borderBottom: '1px solid #eee' }}>
+        <h1 style={{ margin: 0, fontSize: '1.2rem' }}>EVENTCORE AFRICA</h1>
       </header>
 
       <main style={{ padding: '20px' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '16px' }}>Upcoming Events</h2>
-        
         {loading ? (
           <p>Connecting to Dedza Stadium...</p>
+        ) : debugError ? (
+          <p style={{ color: 'red' }}>Error: {debugError}</p>
         ) : events.length === 0 ? (
-          <div style={{ padding: '40px 20px', textAlign: 'center', background: '#f8fafc', borderRadius: '24px' }}>
-            <p style={{ color: '#64748b' }}>No live matches found in database.</p>
-          </div>
+          <p>No active matches found. Check Supabase RLS.</p>
         ) : (
           events.map((event) => (
-            <div key={event.id} style={{ 
-              backgroundImage: `linear-gradient(0deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 100%), url(${event.image_url})`,
-              backgroundSize: 'cover',
-              borderRadius: '24px',
-              padding: '20px',
-              marginBottom: '16px',
-              color: 'white',
-              minHeight: '180px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'flex-end'
-            }}>
-              <h4 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '4px' }}>{event.title}</h4>
-              <p style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: '12px' }}>{event.location} · {new Date(event.date).toLocaleDateString()}</p>
-              <button style={{ 
-                background: 'white', color: '#2563eb', border: 'none', 
-                padding: '12px 20px', borderRadius: '60px', fontWeight: 700 
-              }}>
-                Buy Now
+            <div key={event.id} style={{ padding: '20px', background: '#f4f4f4', borderRadius: '15px', marginBottom: '10px' }}>
+              <h2 style={{ margin: '0 0 10px 0' }}>{event.title}</h2>
+              <p>{event.location} · {new Date(event.date).toDateString()}</p>
+              <button style={{ background: '#2563eb', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '5px' }}>
+                Buy Ticket
               </button>
             </div>
           ))
