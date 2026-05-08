@@ -104,3 +104,4 @@ const inputStyle = {
   fontSize: '1rem',
   outline: 'none'
 };
+
