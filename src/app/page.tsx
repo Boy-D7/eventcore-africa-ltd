@@ -1,10 +1,13 @@
 'use client'
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import PurchaseModal from '@/components/PurchaseModal';
 
 export default function Home() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // NEW: State to track which event is being purchased
+  const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
 
   useEffect(() => {
     async function fetchEvents() {
@@ -13,7 +16,7 @@ export default function Home() {
           .from('events')
           .select('*')
           .eq('is_active', true);
-        
+
         if (data) setEvents(data);
       } catch (err) {
         console.error("Fetch error:", err);
@@ -37,7 +40,7 @@ export default function Home() {
 
       <main style={{ padding: '24px 20px' }}>
         <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a', marginBottom: '20px', letterSpacing: '-0.02em' }}>Upcoming Events</h2>
-        
+
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Connecting to Dedza Stadium...</div>
         ) : events.length === 0 ? (
@@ -65,7 +68,7 @@ export default function Home() {
                 background: 'linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(15,23,42,0.95) 100%)',
                 zIndex: 1
               }}></div>
-              
+
               <div style={{ position: 'relative', zIndex: 2 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                    <span style={{ background: '#2563eb', color: 'white', fontSize: '0.7rem', fontWeight: 800, padding: '4px 10px', borderRadius: '20px', textTransform: 'uppercase' }}>Live Pilot</span>
@@ -74,12 +77,17 @@ export default function Home() {
                 <p style={{ fontSize: '0.95rem', color: '#94a3b8', marginBottom: '20px', fontWeight: 500 }}>
                   {event.location} • {new Date(event.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </p>
-                <button style={{ 
-                  width: '100%',
-                  background: '#fff', color: '#2563eb', border: 'none', 
-                  padding: '16px', borderRadius: '18px', fontWeight: 800,
-                  fontSize: '1rem', transition: 'transform 0.2s'
-                }}>
+                
+                {/* UPDATED: Button now opens the modal and passes a default price */}
+                <button 
+                  onClick={() => setSelectedEvent({ ...event, price: 3500 })}
+                  style={{ 
+                    width: '100%',
+                    background: '#fff', color: '#2563eb', border: 'none', 
+                    padding: '16px', borderRadius: '18px', fontWeight: 800,
+                    fontSize: '1rem', cursor: 'pointer'
+                  }}
+                >
                   Buy Ticket
                 </button>
               </div>
@@ -87,6 +95,14 @@ export default function Home() {
           ))
         )}
       </main>
+
+      {/* NEW: Purchase Modal logic */}
+      {selectedEvent && (
+        <PurchaseModal 
+          event={selectedEvent} 
+          onClose={() => setSelectedEvent(null)} 
+        />
+      )}
     </div>
   );
 }
