@@ -27,9 +27,8 @@ export async function createEvent(formData: FormData) {
     throw new Error(error.message)
   }
 
-  // This is CRITICAL: It tells Next.js to refresh the homepage 
-  // so the new match shows up for fans immediately.
+  // Refresh the homepage to show the new event
   revalidatePath('/')
-  
+
   return { success: true }
 }
