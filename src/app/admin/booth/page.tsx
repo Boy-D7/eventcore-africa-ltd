@@ -12,6 +12,8 @@ export default function BoothPage() {
   const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<'IDLE' | 'WAITING_STK' | 'SUCCESS'>('IDLE')
+  // New state for the ticket code
+  const [ticketHash, setTicketHash] = useState('')
 
   useEffect(() => {
     fetchEvents()
@@ -32,7 +34,7 @@ export default function BoothPage() {
   const detectProvider = (num: string) => {
     if (num.startsWith('099') || num.startsWith('098')) return 'AIRTEL'
     if (num.startsWith('088')) return 'TNM'
-    return 'AIRTEL' // Default
+    return 'AIRTEL' 
   }
 
   const triggerSTK = async () => {
@@ -40,7 +42,6 @@ export default function BoothPage() {
     setLoading(true)
     setStatus('WAITING_STK')
 
-    // 1. Create Transaction Record
     const { data: tx, error } = await supabase.from('transactions').insert({
       phone_number: phone,
       amount: selectedTier.price_mwk,
@@ -55,22 +56,22 @@ export default function BoothPage() {
       return
     }
 
-    // 2. Real-time Subscription to wait for SUCCESS
     const subscription = supabase
       .channel('booth_payment')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'transactions', filter: `id=eq.${tx.id}` }, 
       async (payload) => {
         if (payload.new.status === 'SUCCESS') {
           subscription.unsubscribe()
-          await issueTicket(payload.new)
+          await issueTicket()
         }
       }).subscribe()
   }
 
-  const issueTicket = async (tx: any) => {
+  const issueTicket = async () => {
+    // Generate the unique 6-character code
     const hash = Math.random().toString(36).substring(2, 8).toUpperCase()
-    
-    // Create Ticket
+    setTicketHash(hash)
+
     const { error } = await supabase.from('tickets').insert({
       event_id: selectedEvent.id,
       tier_id: selectedTier.id,
@@ -82,7 +83,8 @@ export default function BoothPage() {
     if (!error) {
       setStatus('SUCCESS')
       setLoading(false)
-      setTimeout(() => window.print(), 500) // Trigger printer-agnostic print
+      // Small delay to ensure the QR code image is ready for the printer
+      setTimeout(() => window.print(), 800) 
     }
   }
 
@@ -124,7 +126,7 @@ export default function BoothPage() {
             <div key={tier.id} onClick={() => { setSelectedTier(tier); setStep('PAYMENT'); }} style={tierCard}>
               <div>
                 <div style={tierName}>{tier.name}</div>
-                <div style={tierCap}>{tier.capacity - tier.sold_count} left</div>
+                <div style={tierCap}>{tier.capacity - (tier.sold_count || 0)} left</div>
               </div>
               <div style={tierPrice}>MK {tier.price_mwk}</div>
             </div>
@@ -158,7 +160,10 @@ export default function BoothPage() {
             <div style={successBox}>
               <CheckCircle2 size={32} />
               <p>Ticket Issued! Receipt Printing...</p>
-              <button onClick={() => {setStep('EVENTS'); setStatus('IDLE'); setPhone('');}} style={resetBtn}>
+              <button 
+                onClick={() => {setStep('EVENTS'); setStatus('IDLE'); setPhone(''); setTicketHash('');}} 
+                style={resetBtn}
+              >
                 Next Customer
               </button>
             </div>
@@ -166,20 +171,34 @@ export default function BoothPage() {
         </div>
       )}
 
-      {/* PRINT TEMPLATE (Hidden from UI, visible only to Printer) */}
+      {/* PRODUCTION PRINT TEMPLATE (Hidden on screen) */}
       <div className="print-area">
-        <center>
-          <h2 style={{margin:0}}>EVENTCORE AFRICA</h2>
-          <p style={{fontSize: '10px'}}>Digital Event Infrastructure</p>
-          <hr />
-          <h3>{selectedEvent?.title}</h3>
-          <p>{selectedTier?.name} - MK {selectedTier?.price_mwk}</p>
-          <div style={{border: '2px solid #000', padding: '10px', margin: '10px 0', fontSize: '24px', fontWeight: 'bold'}}>
-            {/* The Scanner will read this code or a QR code generated here */}
-            VALID TICKET
+        <center style={{ fontFamily: 'monospace', width: '100%', padding: '10px' }}>
+          <h2 style={{ margin: 0 }}>EVENTCORE AFRICA</h2>
+          <p style={{ fontSize: '10px', margin: '2px 0' }}>Digital Event Infrastructure</p>
+          <hr style={{ borderTop: '1px dashed #000' }} />
+          
+          <h3 style={{ margin: '10px 0 5px' }}>{selectedEvent?.title}</h3>
+          <p style={{ margin: 0, fontWeight: 'bold' }}>{selectedTier?.name}</p>
+          <p style={{ margin: '0 0 10px' }}>Price: MK {selectedTier?.price_mwk}</p>
+
+          {ticketHash && (
+            <div style={{ background: '#fff', padding: '10px', display: 'inline-block' }}>
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${ticketHash}`} 
+                alt="Ticket QR"
+                style={{ width: '130px', height: '130px' }}
+              />
+            </div>
+          )}
+
+          <div style={{ marginTop: '10px', fontSize: '20px', fontWeight: 'bold', border: '1px solid #000', padding: '5px' }}>
+            CODE: {ticketHash}
           </div>
-          <p>Phone: {phone}</p>
-          <p>{new Date().toLocaleString()}</p>
+
+          <p style={{ fontSize: '9px', marginTop: '10px' }}>Phone: {phone}</p>
+          <p style={{ fontSize: '9px' }}>{new Date().toLocaleString()}</p>
+          <p style={{ fontSize: '10px', fontWeight: 'bold', marginTop: '10px' }}>VALID FOR SINGLE ENTRY</p>
         </center>
       </div>
 
