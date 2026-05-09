@@ -11,7 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
-  // Sync Auth State
+  // Sync Auth State with Supabase
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -27,17 +27,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body style={{ margin: 0, padding: 0, background: '#f4f6fb', fontFamily: 'system-ui, sans-serif' }}>
-        
+
+        {/* AUTHENTICATION MODAL */}
         <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
 
-        {/* 1. OVERLAY */}
+        {/* 1. OVERLAY (Blurred background when menu is open) */}
         {isOpen && <div onClick={() => setIsOpen(false)} style={overlayStyle} />}
 
-        {/* 2. SIDEBAR */}
+        {/* 2. SIDEBAR NAVIGATION */}
         <nav style={{ ...sidebarStyle, left: isOpen ? '0' : '-320px' }}>
           <div style={sidebarHeader}>
-            <div style={{ fontWeight: 900 }}>MENU</div>
-            <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.2rem' }}>✕</button>
+            <div style={{ fontWeight: 900, fontSize: '1.2rem' }}>
+               EVENT<span style={{ color: '#2563eb' }}>CORE</span>
+            </div>
+            <button onClick={() => setIsOpen(false)} style={closeBtnStyle}>✕</button>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -45,18 +48,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/events" onClick={() => setIsOpen(false)} style={navLinkStyle}>📅 Events</Link>
             <Link href="/booth" onClick={() => setIsOpen(false)} style={navLinkStyle}>🏪 Booth Agent</Link>
             <Link href="/scanner" onClick={() => setIsOpen(false)} style={navLinkStyle}>📷 Gate Scanner</Link>
+            
+            {/* ADMIN DASHBOARD LINK (Highlighted for Admin usage) */}
+            <Link 
+              href="/admin" 
+              onClick={() => setIsOpen(false)} 
+              style={{ ...navLinkStyle, background: '#eff6ff', color: '#1e40af', marginTop: '12px', border: '1px solid #dbeafe' }}
+            >
+              📈 Admin Dashboard
+            </Link>
           </div>
 
-          {/* DYNAMIC USER INFO (No more static names!) */}
+          {/* SIDEBAR FOOTER (User Status) */}
           <div style={sidebarFooter}>
             {user ? (
               <>
                 <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '0 0 4px' }}>Logged in as</p>
-                <p style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '12px' }}>{user.email}</p>
+                <p style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '12px', wordBreak: 'break-all' }}>{user.email}</p>
                 <button onClick={() => supabase.auth.signOut()} style={logoutBtn}>Sign Out</button>
               </>
             ) : (
-              <button onClick={() => setIsAuthOpen(true)} style={loginBtn}>Login to Account</button>
+              <button onClick={() => setIsAuthOpen(true)} style={loginBtn}>Login to Admin</button>
             )}
           </div>
         </nav>
@@ -68,23 +80,40 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           onAuthClick={() => setIsAuthOpen(true)} 
         />
 
-        <main style={{ paddingTop: '80px', minHeight: '100vh' }}>
+        {/* 4. MAIN PAGE CONTENT */}
+        <main style={{ paddingTop: '80px', minHeight: '100vh', maxWidth: '100vw', overflowX: 'hidden' }}>
           {children}
         </main>
+
       </body>
     </html>
   )
 }
 
-// --- Styles ---
+// --- Layout Styles ---
 const sidebarStyle: React.CSSProperties = { 
   position: 'fixed', top: 0, bottom: 0, width: '280px', background: '#fff', 
-  zIndex: 2000, transition: '0.3s ease', padding: '24px', display: 'flex', flexDirection: 'column' 
+  zIndex: 2000, transition: '0.3s cubic-bezier(0.4, 0, 0.2, 1)', padding: '24px', 
+  display: 'flex', flexDirection: 'column', boxShadow: '10px 0 30px rgba(0,0,0,0.05)'
 };
 
-const overlayStyle: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', zIndex: 1000 };
-const sidebarHeader = { display: 'flex', justifyContent: 'space-between', marginBottom: '32px' };
+const overlayStyle: React.CSSProperties = { 
+  position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.3)', 
+  backdropFilter: 'blur(6px)', zIndex: 1000 
+};
+
+const sidebarHeader = { display: 'flex', justifyContent: 'space-between', marginBottom: '32px', alignItems: 'center' };
+
+const closeBtnStyle = { background: 'none', border: 'none', fontSize: '1.4rem', color: '#94a3b8', cursor: 'pointer' };
+
+const navLinkStyle = { 
+  padding: '14px 18px', borderRadius: '16px', color: '#334155', 
+  textDecoration: 'none', fontWeight: 600, background: '#f8fafc', 
+  display: 'block', fontSize: '0.95rem' 
+};
+
 const sidebarFooter = { marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid #f1f5f9' };
-const navLinkStyle = { padding: '14px 18px', borderRadius: '12px', color: '#1e293b', textDecoration: 'none', fontWeight: 600, background: '#f8fafc', display: 'block' };
-const logoutBtn = { color: '#ef4444', border: 'none', background: 'none', fontWeight: 700, cursor: 'pointer', padding: 0 };
-const loginBtn = { color: '#2563eb', border: 'none', background: 'none', fontWeight: 700, cursor: 'pointer', padding: 0 };
+
+const logoutBtn = { color: '#ef4444', border: 'none', background: 'none', fontWeight: 700, cursor: 'pointer', padding: 0, fontSize: '0.9rem' };
+
+const loginBtn = { color: '#2563eb', border: 'none', background: 'none', fontWeight: 700, cursor: 'pointer', padding: 0, fontSize: '0.9rem' };
