@@ -1,11 +1,10 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import PurchaseModal from '@/components/PurchaseModal'
 import { Menu, Bell, Calendar, Clock, MapPin, Ticket } from 'lucide-react'
 
-// Defined Interface for better type safety
 interface Event {
   id: string;
   title: string;
@@ -24,6 +23,7 @@ export default function Home() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // 1. Optimized Fetching
   useEffect(() => {
     async function fetchEvents() {
       try {
@@ -36,7 +36,7 @@ export default function Home() {
         if (error) throw error;
         if (data) setEvents(data);
       } catch (err) {
-        console.error("Error fetching events:", err);
+        console.error("Database connection error:", err);
       } finally {
         setLoading(false);
       }
@@ -45,30 +45,40 @@ export default function Home() {
   }, []);
 
   const heroEvent = events.length > 0 ? events[0] : null;
-  const upcomingEvents = events.slice(1, 5); 
+  const upcomingEvents = events.slice(1, 5);
+
+  // 2. Cross-Browser Resilient Timer (Fixes NaN Error)
+  const calculateTime = useCallback(() => {
+    if (!heroEvent) return;
+
+    // Use space instead of 'T' and slashes instead of dashes for Safari/Mobile support
+    const datePart = heroEvent.date.replace(/-/g, '/');
+    const timePart = heroEvent.time || '00:00:00';
+    const eventDateTime = new Date(`${datePart} ${timePart}`);
+    
+    const now = new Date();
+    const diff = eventDateTime.getTime() - now.getTime();
+
+    if (isNaN(eventDateTime.getTime())) {
+      setTimeLeft('TBD');
+      return;
+    }
+
+    if (diff <= 0) {
+      setTimeLeft('Live Now');
+    } else {
+      const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+      const m = Math.floor((diff / 1000 / 60) % 60);
+      setTimeLeft(`${d}d ${h}h ${m}m`);
+    }
+  }, [heroEvent]);
 
   useEffect(() => {
-    if (!heroEvent) return;
-    
-    const calculateTime = () => {
-      const eventDateTime = new Date(`${heroEvent.date}T${heroEvent.time || '00:00:00'}`);
-      const now = new Date();
-      const diff = eventDateTime.getTime() - now.getTime();
-      
-      if (diff <= 0) {
-        setTimeLeft('Live Now');
-      } else {
-        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
-        const m = Math.floor((diff / 1000 / 60) % 60);
-        setTimeLeft(`${d}d ${h}h ${m}m`);
-      }
-    };
-
     calculateTime();
-    const timer = setInterval(calculateTime, 60000); // Update every minute for performance
+    const timer = setInterval(calculateTime, 60000);
     return () => clearInterval(timer);
-  }, [heroEvent]);
+  }, [calculateTime]);
 
   const openModal = (event: Event) => {
     setSelectedEvent(event);
@@ -76,14 +86,18 @@ export default function Home() {
   };
 
   if (loading) {
-    return <div style={{...containerStyle, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>Loading...</div>;
+    return (
+      <div style={{...containerStyle, display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>
+        <p style={{fontWeight: 600, color: '#2563eb'}}>Loading EventCore...</p>
+      </div>
+    );
   }
 
   return (
     <div style={containerStyle}>
-      {/* --- NAVBAR --- */}
+      {/* --- FIXED NAVBAR (Fixes Double Header/Scrolling Conflict) --- */}
       <nav style={navStyle}>
-        <Menu size={28} color="#0f172a" style={{ cursor: 'pointer' }} />
+        <Menu size={24} color="#0f172a" style={{ cursor: 'pointer' }} />
         <div style={logoContainer}>
           <div style={logoRow}>
             <span style={logoBlack}>EVENT</span>
@@ -91,74 +105,66 @@ export default function Home() {
           </div>
           <span style={logoSub}>AFRICA LIMITED</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <Bell size={22} color="#64748b" style={{ cursor: 'pointer' }} />
-          <button style={signInBtn}>Sign In</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Bell size={20} color="#64748b" style={{ cursor: 'pointer' }} />
+          <button style={signInBtn}>Login</button>
         </div>
       </nav>
 
-      {/* --- HERO BANNER --- */}
       {heroEvent ? (
-        <div style={{...heroBannerStyle, backgroundImage: `url(${heroEvent.image_url || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1000&auto=format&fit=crop'})`}}>
+        <div style={{...heroBannerStyle, backgroundImage: `url(${heroEvent.image_url})`}}>
           <div style={bannerOverlay}></div>
           <div style={bannerContent}>
-            <div style={bannerLabel}>NEXT MATCH · {heroEvent.location?.toUpperCase()}</div>
+            <div style={bannerLabel}>FEATURED EVENT · {heroEvent.location?.toUpperCase()}</div>
             <h2 style={bannerTitle}>{heroEvent.title}</h2>
             <div style={bannerMeta}>
-              <span style={metaItem}><Calendar size={14} /> {new Date(heroEvent.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+              <span style={metaItem}><Calendar size={14} /> {new Date(heroEvent.date).toLocaleDateString('en-GB')}</span>
               <span style={metaItem}><Clock size={14} /> {heroEvent.time?.substring(0, 5)}</span>
             </div>
-
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <div style={countdownStyle}>⏳ {timeLeft}</div>
               <button style={heroBuyBtn} onClick={() => openModal(heroEvent)}>
-                <Ticket size={18} /> Buy Ticket
+                <Ticket size={16} /> Get Tickets
               </button>
             </div>
           </div>
         </div>
       ) : (
-        <div style={emptyStateStyle}>
-          <p>No upcoming events found.</p>
-        </div>
+        <div style={emptyHeroStyle}>Stay tuned for more matches at Dedza Stadium.</div>
       )}
 
       {/* --- CATEGORY PILLS --- */}
       <div style={categoryRow}>
-        <div style={catPillActive}><MapPin size={14} /> Dedza Council Stadium</div>
+        <div style={catPillActive}><MapPin size={14} /> Dedza Stadium</div>
+        <div style={catPill}>Football</div>
+        <div style={catPill}>Music</div>
         <div style={catPill}>Churches</div>
-        <div style={catPill}>Weddings</div>
-        <div style={catPill}>Concerts</div>
       </div>
 
       <main style={{ padding: '0 16px 40px' }}>
         <div style={sectionHeader}>
-          <h2 style={sectionTitleStyle}>Upcoming Events</h2>
-          <Link href="/events" style={viewAllLinkStyle}>View All ❯</Link>
+          <h2 style={sectionTitleStyle}>Upcoming</h2>
+          <Link href="/events" style={viewAllLinkStyle}>See all ❯</Link>
         </div>
 
-        {upcomingEvents.length > 0 ? (
-          <div style={gridStyle}>
-            {upcomingEvents.map((event) => (
-              <div key={event.id} style={{...cardStyle, backgroundImage: `url(${event.image_url || 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=1000&auto=format&fit=crop'})`}}>
-                <div style={cardContent}>
-                  <span style={badgeStyle}>⚽ {event.category || 'Football'}</span>
-                  <h4 style={cardTitleStyle}>{event.title}</h4>
-                  <p style={cardInfoStyle}>📍 {event.location} · {new Date(event.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
-
-                  <button style={cardBuyBtn} onClick={() => openModal(event)}>
-                    <Ticket size={16} /> Buy Now
-                  </button>
-                </div>
+        <div style={gridStyle}>
+          {upcomingEvents.map((event) => (
+            <div key={event.id} style={{...cardStyle, backgroundImage: `url(${event.image_url})`}}>
+              <div style={cardContent}>
+                <span style={badgeStyle}>⚽ {event.category || 'Sports'}</span>
+                <h4 style={cardTitleStyle}>{event.title}</h4>
+                <p style={cardInfoStyle}>{event.location} · {new Date(event.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
+                <button style={cardBuyBtn} onClick={() => openModal(event)}>
+                  <Ticket size={14} /> Buy Now
+                </button>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div style={noUpcomingEventsStyle}>More events coming soon...</div>
-        )}
+            </div>
+          ))}
+        </div>
       </main>
 
-      {selectedEvent && (
+      {/* --- MODAL GUARD (Prevents Crashing) --- */}
+      {isModalOpen && selectedEvent && (
         <PurchaseModal 
           event={selectedEvent} 
           isOpen={isModalOpen} 
@@ -169,41 +175,40 @@ export default function Home() {
   )
 }
 
-// --- Enhanced Styles ---
-const containerStyle = { maxWidth: '480px', margin: '0 auto', background: '#fff', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif' };
-const navStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', borderBottom: '1px solid #f1f5f9', background: '#fff', position: 'sticky' as const, top: 0, zIndex: 100 };
+// --- PRODUCTION STYLES ---
+const containerStyle = { maxWidth: '480px', margin: '0 auto', background: '#fff', minHeight: '100vh', fontFamily: 'Inter, sans-serif', overflowX: 'hidden' as const };
+const navStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #f1f5f9', background: 'rgba(255,255,255,0.95)', position: 'sticky' as const, top: 0, zIndex: 1000, backdropFilter: 'blur(8px)' };
 const logoContainer = { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' };
-const logoRow = { display: 'flex', fontWeight: 900, fontSize: '1.2rem', letterSpacing: '-0.5px', lineHeight: 1 };
+const logoRow = { display: 'flex', fontWeight: 900, fontSize: '1.1rem', letterSpacing: '-0.5px' };
 const logoBlack = { color: '#0f172a' };
 const logoBlue = { color: '#2563eb' };
-const logoSub = { fontWeight: 700, fontSize: '0.6rem', color: '#2563eb', letterSpacing: '1px', marginTop: '2px' };
-const signInBtn = { background: '#0f172a', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '12px', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' };
+const logoSub = { fontWeight: 700, fontSize: '0.55rem', color: '#2563eb', letterSpacing: '1.5px', marginTop: '1px' };
+const signInBtn = { background: '#0f172a', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '10px', fontWeight: 600, fontSize: '0.85rem' };
 
-const heroBannerStyle: React.CSSProperties = { margin: '16px', padding: '24px', borderRadius: '32px', position: 'relative', overflow: 'hidden', backgroundSize: 'cover', backgroundPosition: 'center', color: 'white', minHeight: '300px', display: 'flex', alignItems: 'flex-end' };
-const bannerOverlay: React.CSSProperties = { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'linear-gradient(135deg, rgba(37,99,235,0.85) 0%, rgba(30,58,138,0.95) 100%)', zIndex: 1 };
+const heroBannerStyle: React.CSSProperties = { margin: '16px', padding: '24px', borderRadius: '24px', position: 'relative', overflow: 'hidden', backgroundSize: 'cover', backgroundPosition: 'center', color: 'white', minHeight: '280px', display: 'flex', alignItems: 'flex-end' };
+const bannerOverlay: React.CSSProperties = { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(15,23,42,0.95) 100%)', zIndex: 1 };
 const bannerContent: React.CSSProperties = { position: 'relative', zIndex: 2, width: '100%' };
-const bannerLabel = { fontSize: '0.7rem', fontWeight: 600, letterSpacing: '1px', opacity: 0.9, marginBottom: '8px' };
-const bannerTitle = { fontSize: '2rem', fontWeight: 800, margin: '0 0 12px 0', lineHeight: 1.1 };
-const bannerMeta = { display: 'flex', gap: '15px', marginBottom: '24px', fontSize: '0.95rem', fontWeight: 500 };
+const bannerLabel = { fontSize: '0.65rem', fontWeight: 600, letterSpacing: '1px', opacity: 0.8, marginBottom: '6px' };
+const bannerTitle = { fontSize: '1.75rem', fontWeight: 800, margin: '0 0 10px 0', lineHeight: 1.1 };
+const bannerMeta = { display: 'flex', gap: '12px', marginBottom: '20px', fontSize: '0.85rem', opacity: 0.9 };
 const metaItem = { display: 'flex', alignItems: 'center', gap: '4px' };
-const countdownStyle = { background: 'rgba(255,255,255,0.2)', padding: '12px 16px', borderRadius: '18px', fontWeight: 700, backdropFilter: 'blur(10px)', fontSize: '0.85rem' };
-const heroBuyBtn = { background: '#fff', color: '#2563eb', border: 'none', padding: '12px 24px', borderRadius: '18px', fontWeight: 800, cursor: 'pointer', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' };
+const countdownStyle = { background: 'rgba(255,255,255,0.15)', padding: '10px 14px', borderRadius: '14px', fontWeight: 700, backdropFilter: 'blur(10px)', fontSize: '0.8rem' };
+const heroBuyBtn = { background: '#2563eb', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '14px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' };
 
-const categoryRow = { display: 'flex', gap: '10px', overflowX: 'auto' as const, padding: '0 16px', margin: '12px 0', scrollbarWidth: 'none' as const };
-const catPillActive = { background: '#eff6ff', color: '#1e40af', padding: '10px 18px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600, border: '1px solid #dbeafe', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', gap: '6px' };
-const catPill = { background: '#fff', color: '#64748b', padding: '10px 18px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 500, border: '1px solid #f1f5f9', whiteSpace: 'nowrap' as const };
+const categoryRow = { display: 'flex', gap: '8px', overflowX: 'auto' as const, padding: '0 16px', margin: '16px 0', scrollbarWidth: 'none' as const };
+const catPillActive = { background: '#2563eb', color: '#fff', padding: '8px 16px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' as const };
+const catPill = { background: '#f8fafc', color: '#64748b', padding: '8px 16px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, border: '1px solid #f1f5f9', whiteSpace: 'nowrap' as const };
 
-const sectionHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '32px 0 16px' };
-const sectionTitleStyle = { fontSize: '1.6rem', fontWeight: 800, color: '#0f172a', margin: 0 };
-const viewAllLinkStyle = { color: '#2563eb', textDecoration: 'none', fontSize: '1rem', fontWeight: 700 };
+const sectionHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '24px 0 12px' };
+const sectionTitleStyle = { fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 };
+const viewAllLinkStyle = { color: '#2563eb', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600 };
 
-const gridStyle = { display: 'flex', flexDirection: 'column' as const, gap: '24px' };
-const cardStyle: React.CSSProperties = { borderRadius: '32px', overflow: 'hidden', position: 'relative', minHeight: '220px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', backgroundSize: 'cover', backgroundPosition: 'center' };
-const cardContent: React.CSSProperties = { background: 'linear-gradient(to top, rgba(0,0,0,0.9) 10%, transparent 100%)', padding: '24px', color: 'white' };
-const badgeStyle = { background: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, marginBottom: '10px', display: 'inline-block', backdropFilter: 'blur(4px)' };
-const cardTitleStyle = { fontSize: '1.4rem', fontWeight: 800, margin: '0 0 6px 0' };
-const cardInfoStyle = { opacity: 0.8, fontSize: '0.85rem', margin: '0 0 16px 0', fontWeight: 500 };
-const cardBuyBtn = { background: '#fff', color: '#2563eb', border: 'none', padding: '14px', borderRadius: '16px', fontWeight: 800, cursor: 'pointer', width: 'fit-content', minWidth: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' };
+const gridStyle = { display: 'flex', flexDirection: 'column' as const, gap: '20px' };
+const cardStyle: React.CSSProperties = { borderRadius: '24px', overflow: 'hidden', position: 'relative', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', backgroundSize: 'cover', backgroundPosition: 'center' };
+const cardContent: React.CSSProperties = { background: 'linear-gradient(to top, rgba(15,23,42,1) 0%, transparent 100%)', padding: '20px', color: 'white' };
+const badgeStyle = { background: 'rgba(37,99,235,0.3)', color: '#fff', padding: '4px 10px', borderRadius: '8px', fontSize: '0.65rem', fontWeight: 700, marginBottom: '8px', display: 'inline-block', backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.1)' };
+const cardTitleStyle = { fontSize: '1.2rem', fontWeight: 800, margin: '0 0 4px 0' };
+const cardInfoStyle = { opacity: 0.7, fontSize: '0.75rem', margin: '0 0 12px 0' };
+const cardBuyBtn = { background: '#fff', color: '#0f172a', border: 'none', padding: '10px 16px', borderRadius: '10px', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' };
 
-const emptyStateStyle = { margin: '16px', padding: '40px', borderRadius: '32px', border: '2px dashed #e2e8f0', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#64748b', fontWeight: 500 };
-const noUpcomingEventsStyle = { padding: '20px', textAlign: 'center' as const, color: '#94a3b8', fontSize: '0.9rem' };
+const emptyHeroStyle = { margin: '16px', padding: '40px', borderRadius: '24px', background: '#f8fafc', color: '#64748b', textAlign: 'center' as const, fontSize: '0.9rem' };
