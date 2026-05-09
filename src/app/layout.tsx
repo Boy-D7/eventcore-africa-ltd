@@ -43,7 +43,6 @@ export default function RootLayout({
   )
 }
 
-// Infrastructure Styles
 const navStyle: React.CSSProperties = {
   position: 'fixed', top: 0, width: '100%', background: '#fff', 
   borderBottom: '1px solid #e2e8f0', zIndex: 1000, height: '64px', 
