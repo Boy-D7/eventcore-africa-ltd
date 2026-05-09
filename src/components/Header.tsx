@@ -22,7 +22,7 @@ export default function Header({ user, onMenuClick, onAuthClick }: HeaderProps) 
           <div style={brandContainer}>
             <span style={mainLogo}>EVENTCORE</span>
             <span style={subLogo}>AFRICA LIMITED</span>
-            <span style={tagline}>A Digital Event Infrastructure</span>
+            <span style={tagline}>A Secure Digital Event Infrastructure</span>
           </div>
         </div>
 
