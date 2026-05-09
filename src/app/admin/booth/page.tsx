@@ -1,90 +1,226 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import PurchaseModal from '@/components/PurchaseModal'
+import { Smartphone, Printer, ChevronLeft, Loader2, CheckCircle2, Ticket } from 'lucide-react'
 
-export default function BoothAgentPage() {
-  const [events, setEvents] = useState<any[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+export default function BoothPage() {
+  const [step, setStep] = useState<'EVENTS' | 'TIERS' | 'PAYMENT'>('EVENTS')
+  const [events, setEvents] = useState<any[]>([])
+  const [selectedEvent, setSelectedEvent] = useState<any>(null)
+  const [tiers, setTiers] = useState<any[]>([])
+  const [selectedTier, setSelectedTier] = useState<any>(null)
+  const [phone, setPhone] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [status, setStatus] = useState<'IDLE' | 'WAITING_STK' | 'SUCCESS'>('IDLE')
 
   useEffect(() => {
-    async function fetchEvents() {
-      const { data } = await supabase
-        .from('events')
-        .select('*')
-        .order('date', { ascending: true });
-      if (data) setEvents(data);
-    }
-    fetchEvents();
-  }, []);
+    fetchEvents()
+  }, [])
 
-  // Filter events based on search (e.g., searching for "Dynamos")
-  const filteredEvents = events.filter(e => 
-    e.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  async function fetchEvents() {
+    const { data } = await supabase.from('events').select('*').eq('is_active', true)
+    if (data) setEvents(data)
+  }
+
+  async function handleSelectEvent(event: any) {
+    setSelectedEvent(event)
+    const { data } = await supabase.from('ticket_tiers').select('*').eq('event_id', event.id)
+    if (data) setTiers(data)
+    setStep('TIERS')
+  }
+
+  const detectProvider = (num: string) => {
+    if (num.startsWith('099') || num.startsWith('098')) return 'AIRTEL'
+    if (num.startsWith('088')) return 'TNM'
+    return 'AIRTEL' // Default
+  }
+
+  const triggerSTK = async () => {
+    if (phone.length < 10) return alert("Enter valid Malawi phone number")
+    setLoading(true)
+    setStatus('WAITING_STK')
+
+    // 1. Create Transaction Record
+    const { data: tx, error } = await supabase.from('transactions').insert({
+      phone_number: phone,
+      amount: selectedTier.price_mwk,
+      provider: detectProvider(phone),
+      status: 'PENDING',
+      external_ref: `BTH-${Math.random().toString(36).substring(7).toUpperCase()}`
+    }).select().single()
+
+    if (error) {
+      alert("Failed to initiate transaction")
+      setLoading(false)
+      return
+    }
+
+    // 2. Real-time Subscription to wait for SUCCESS
+    const subscription = supabase
+      .channel('booth_payment')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'transactions', filter: `id=eq.${tx.id}` }, 
+      async (payload) => {
+        if (payload.new.status === 'SUCCESS') {
+          subscription.unsubscribe()
+          await issueTicket(payload.new)
+        }
+      }).subscribe()
+  }
+
+  const issueTicket = async (tx: any) => {
+    const hash = Math.random().toString(36).substring(2, 8).toUpperCase()
+    
+    // Create Ticket
+    const { error } = await supabase.from('tickets').insert({
+      event_id: selectedEvent.id,
+      tier_id: selectedTier.id,
+      ticket_hash: hash,
+      customer_phone: phone,
+      status: 'valid'
+    })
+
+    if (!error) {
+      setStatus('SUCCESS')
+      setLoading(false)
+      setTimeout(() => window.print(), 500) // Trigger printer-agnostic print
+    }
+  }
 
   return (
-    <div style={container}>
-      <header style={header}>
-        <h1 style={title}>Booth Agent Terminal</h1>
-        <div style={badge}>Cashless Only</div>
-      </header>
-
-      <div style={searchWrapper}>
-        <input 
-          type="text" 
-          placeholder="Search match or event..." 
-          style={searchInput}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+    <div style={containerStyle}>
+      {/* HEADER SECTION */}
+      <div style={headerStyle}>
+        {step !== 'EVENTS' && (
+          <button onClick={() => setStep(step === 'TIERS' ? 'EVENTS' : 'TIERS')} style={backBtn}>
+            <ChevronLeft size={20} />
+          </button>
+        )}
+        <div style={brandCol}>
+          <span style={mainBrand}>BOOTH AGENT</span>
+          <span style={subBrand}>EVENTCORE AFRICA LTD</span>
+        </div>
       </div>
 
-      <div style={grid}>
-        {filteredEvents.map(event => (
-          <div 
-            key={event.id} 
-            style={card} 
-            onClick={() => { setSelectedEvent(event); setIsModalOpen(true); }}
-          >
-            <div style={imageBox}>
-              {event.image_url ? (
-                <img src={event.image_url} alt="" style={img} />
-              ) : (
-                <div style={placeholder}>⚽ {event.title.split(' ')[0]}</div>
-              )}
+      {/* STEP 1: BROWSE EVENTS */}
+      {step === 'EVENTS' && (
+        <div style={gridStyle}>
+          {events.map(ev => (
+            <div key={ev.id} onClick={() => handleSelectEvent(ev)} style={eventCard}>
+              <div style={{...imgStyle, backgroundImage: `url(${ev.image_url})`}} />
+              <div style={cardInfo}>
+                <h3 style={eventTitle}>{ev.title}</h3>
+                <p style={eventLoc}>{ev.location}</p>
+              </div>
             </div>
-            <div style={cardContent}>
-              <h3 style={eventTitle}>{event.title}</h3>
-              <p style={eventMeta}>📍 {event.location}</p>
-              <p style={eventMeta}>📅 {event.date}</p>
+          ))}
+        </div>
+      )}
+
+      {/* STEP 2: SELECT TIER */}
+      {step === 'TIERS' && (
+        <div style={tierList}>
+          <h2 style={sectionTitle}>Select Ticket Type</h2>
+          {tiers.map(tier => (
+            <div key={tier.id} onClick={() => { setSelectedTier(tier); setStep('PAYMENT'); }} style={tierCard}>
+              <div>
+                <div style={tierName}>{tier.name}</div>
+                <div style={tierCap}>{tier.capacity - tier.sold_count} left</div>
+              </div>
+              <div style={tierPrice}>MK {tier.price_mwk}</div>
             </div>
+          ))}
+        </div>
+      )}
+
+      {/* STEP 3: PAYMENT & PUSH */}
+      {step === 'PAYMENT' && (
+        <div style={payCard}>
+          <div style={summaryBox}>
+            <strong>{selectedTier.name}</strong>
+            <span>MK {selectedTier.price_mwk}</span>
           </div>
-        ))}
+
+          <label style={labelStyle}>Customer Mobile Number</label>
+          <input 
+            type="tel" 
+            placeholder="099... or 088..." 
+            value={phone} 
+            onChange={e => setPhone(e.target.value)}
+            style={inputStyle}
+          />
+
+          <button onClick={triggerSTK} disabled={loading} style={loading ? disabledBtn : payBtn}>
+            {loading ? <Loader2 className="spin" /> : <Smartphone size={20} />}
+            {loading ? 'Confirming PIN...' : 'Push STK Payment'}
+          </button>
+
+          {status === 'SUCCESS' && (
+            <div style={successBox}>
+              <CheckCircle2 size={32} />
+              <p>Ticket Issued! Receipt Printing...</p>
+              <button onClick={() => {setStep('EVENTS'); setStatus('IDLE'); setPhone('');}} style={resetBtn}>
+                Next Customer
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PRINT TEMPLATE (Hidden from UI, visible only to Printer) */}
+      <div className="print-area">
+        <center>
+          <h2 style={{margin:0}}>EVENTCORE AFRICA</h2>
+          <p style={{fontSize: '10px'}}>Digital Event Infrastructure</p>
+          <hr />
+          <h3>{selectedEvent?.title}</h3>
+          <p>{selectedTier?.name} - MK {selectedTier?.price_mwk}</p>
+          <div style={{border: '2px solid #000', padding: '10px', margin: '10px 0', fontSize: '24px', fontWeight: 'bold'}}>
+            {/* The Scanner will read this code or a QR code generated here */}
+            VALID TICKET
+          </div>
+          <p>Phone: {phone}</p>
+          <p>{new Date().toLocaleString()}</p>
+        </center>
       </div>
 
-      <PurchaseModal 
-        event={selectedEvent} 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-      />
+      <style>{`
+        @media screen { .print-area { display: none; } }
+        @media print { 
+          body * { visibility: hidden; }
+          .print-area, .print-area * { visibility: visible; }
+          .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+        .spin { animation: rotate 1s linear infinite; }
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   )
 }
 
-// --- Styles ---
-const container = { padding: '20px', maxWidth: '800px', margin: '0 auto', minHeight: '100vh', background: '#f8fafc' };
-const header = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' };
-const title = { fontSize: '1.4rem', fontWeight: 900, color: '#0f172a' };
-const badge = { background: '#2563eb', color: '#fff', padding: '4px 12px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 800 };
-const searchWrapper = { marginBottom: '24px' };
-const searchInput = { width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0', fontSize: '1rem', outline: 'none', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' };
-const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '16px' };
-const card = { background: '#fff', borderRadius: '20px', overflow: 'hidden', border: '1px solid #e2e8f0', cursor: 'pointer', transition: '0.2s' };
-const imageBox = { height: '110px', background: '#f1f5f9' };
-const img = { width: '100%', height: '100%', objectFit: 'cover' as const };
-const placeholder = { height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#94a3b8' };
-const cardContent = { padding: '12px' };
-const eventTitle = { margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#1e293b' };
-const eventMeta = { margin: '4px 0 0', fontSize: '0.7rem', color: '#64748b', fontWeight: 600 };
+// --- STYLES ---
+const containerStyle = { maxWidth: '480px', margin: '0 auto', background: '#f8fafc', minHeight: '100vh', padding: '16px' };
+const headerStyle = { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', marginTop: '10px' };
+const backBtn = { background: '#fff', border: '1px solid #e2e8f0', padding: '8px', borderRadius: '12px', cursor: 'pointer' };
+const brandCol = { display: 'flex', flexDirection: 'column' as const };
+const mainBrand = { fontWeight: 900, fontSize: '1rem', color: '#0f172a' };
+const subBrand = { fontSize: '0.6rem', fontWeight: 700, color: '#2563eb', letterSpacing: '1px' };
+const gridStyle = { display: 'flex', flexDirection: 'column' as const, gap: '16px' };
+const eventCard = { background: '#fff', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', cursor: 'pointer' };
+const imgStyle = { height: '140px', backgroundSize: 'cover', backgroundPosition: 'center' };
+const cardInfo = { padding: '16px' };
+const eventTitle = { margin: 0, fontSize: '1.1rem', fontWeight: 800 };
+const eventLoc = { margin: '4px 0 0', fontSize: '0.8rem', color: '#64748b' };
+const tierList = { display: 'flex', flexDirection: 'column' as const, gap: '12px' };
+const sectionTitle = { fontSize: '1.2rem', fontWeight: 800, marginBottom: '8px' };
+const tierCard = { background: '#fff', padding: '20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e2e8f0', cursor: 'pointer' };
+const tierName = { fontWeight: 700, color: '#0f172a' };
+const tierCap = { fontSize: '0.7rem', color: '#ef4444', fontWeight: 600 };
+const tierPrice = { fontWeight: 800, color: '#2563eb' };
+const payCard = { background: '#fff', padding: '24px', borderRadius: '24px', border: '1px solid #e2e8f0' };
+const summaryBox = { display: 'flex', justifyContent: 'space-between', padding: '16px', background: '#f8fafc', borderRadius: '12px', marginBottom: '20px' };
+const labelStyle = { display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#64748b', marginBottom: '8px' };
+const inputStyle = { width: '100%', padding: '14px', borderRadius: '12px', border: '2px solid #e2e8f0', fontSize: '1rem', marginBottom: '20px' };
+const payBtn = { width: '100%', padding: '16px', borderRadius: '14px', background: '#0f172a', color: '#fff', border: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', cursor: 'pointer' };
+const disabledBtn = { ...payBtn, opacity: 0.6 };
+const successBox = { marginTop: '20px', textAlign: 'center' as const, color: '#059669', background: '#f0fdf4', padding: '20px', borderRadius: '16px' };
+const resetBtn = { marginTop: '12px', background: '#059669', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '10px', fontWeight: 600 };
