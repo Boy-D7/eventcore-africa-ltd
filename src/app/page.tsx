@@ -1,73 +1,158 @@
+'use client'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import Link from 'next/link'
+import PurchaseModal from '@/components/PurchaseModal'
 
-export default async function Home() {
-  const { data: events, error } = await supabase
-    .from('events')
-    .select('*')
-    .eq('is_active', true)
-    .order('date', { ascending: true });
+export default function Home() {
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [timeLeft, setTimeLeft] = useState<string>('Calculating...');
+  
+  // Modal State
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    async function fetchEvents() {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('is_active', true)
+        .order('date', { ascending: true }); // Closest dates first
+
+      if (data) setEvents(data);
+      setLoading(false);
+    }
+    fetchEvents();
+  }, []);
+
+  // 1. Hero Event is the very next one starting
+  const heroEvent = events.length > 0 ? events[0] : null;
+  // 2. Upcoming Events limits to exactly 3 matches AFTER the Hero event
+  const upcomingEvents = events.slice(1, 4); 
+
+  // 3. Live Countdown Logic
+  useEffect(() => {
+    if (!heroEvent) return;
+
+    const timer = setInterval(() => {
+      // Combine date and time for accurate countdown (fallback to midnight if time is missing)
+      const eventDateTime = new Date(`${heroEvent.date}T${heroEvent.time || '00:00:00'}`);
+      const now = new Date();
+      const diff = eventDateTime.getTime() - now.getTime();
+
+      if (diff <= 0) {
+        setTimeLeft('Match Started!');
+      } else {
+        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const m = Math.floor((diff / 1000 / 60) % 60);
+        setTimeLeft(`${d}d ${h}h ${m}m`);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [heroEvent]);
+
+  const handleBuyClick = (event: any) => {
+    setSelectedEvent(event);
+    setIsModalOpen(true);
+  };
 
   return (
     <div style={containerStyle}>
-      {/* Hero Banner from your HTML UX */}
-      <div style={heroBannerStyle}>
-        <div style={bannerOverlay}></div>
-        <div style={bannerContent}>
-          <div style={bannerLabel}>Next match · Dedza Stadium</div>
-          <h2 style={bannerTitle}>Dynamos vs Silver Strikers</h2>
-          <div style={bannerMeta}>
-            <span>📅 15 May 2026</span>
-            <span>⏰ 14:30</span>
+      {/* --- HERO BANNER --- */}
+      {heroEvent && (
+        <div style={{...heroBannerStyle, backgroundImage: `url(${heroEvent.image_url || 'https://images.pexels.com/photos/114296/pexels-photo-114296.jpeg'})`}}>
+          <div style={bannerOverlay}></div>
+          <div style={bannerContent}>
+            <div style={bannerLabel}>Next Match · {heroEvent.location}</div>
+            <h2 style={bannerTitle}>{heroEvent.title}</h2>
+            <div style={bannerMeta}>
+              <span>📅 {new Date(heroEvent.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric'})}</span>
+              {heroEvent.time && <span>⏰ {heroEvent.time.substring(0, 5)}</span>}
+            </div>
+            
+            <div style={heroActionRow}>
+              <div style={countdownStyle}>⏳ {timeLeft}</div>
+              <button 
+                style={heroBuyBtn} 
+                onClick={() => handleBuyClick(heroEvent)}
+              >
+                🎟️ Buy Ticket
+              </button>
+            </div>
           </div>
-          <div style={countdownStyle}>⏳ Live Infrastructure Ready</div>
         </div>
-      </div>
+      )}
 
       <main style={{ padding: '0 16px 40px' }}>
-        <h2 style={sectionTitleStyle}>Upcoming Events</h2>
-        
-        {error && <p style={{color: 'red'}}>Database Error: {error.message}</p>}
-
-        <div style={gridStyle}>
-          {events && events.length > 0 ? (
-            events.map((event) => (
-              <div key={event.id} style={cardStyle}>
-                <div style={cardContent}>
-                  {/* SAFETY GUARD: This fix prevents the 'toUpperCase' build error */}
-                  <span style={badgeStyle}>
-                    {event.category ? event.category.toUpperCase() : 'EVENT'}
-                  </span>
-                  
-                  <h4 style={cardTitleStyle}>{event.title}</h4>
-                  
-                  <p style={cardInfoStyle}>
-                    📍 {event.location} · {new Date(event.date).toLocaleDateString('en-GB')}
-                  </p>
-                  
-                  <button style={buyBtnStyle}>
-                    Secure Ticket
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div style={emptyStateStyle}>
-              <p>Scanning for live events at Dedza Stadium...</p>
-            </div>
-          )}
+        <div style={headerRow}>
+          <h2 style={sectionTitleStyle}>Upcoming Events</h2>
         </div>
+
+        {loading ? (
+          <p style={{ textAlign: 'center', padding: '20px' }}>Loading events...</p>
+        ) : (
+          <div style={gridStyle}>
+            {upcomingEvents.length > 0 ? (
+              upcomingEvents.map((event) => (
+                <div key={event.id} style={{...cardStyle, backgroundImage: `url(${event.image_url || 'https://images.pexels.com/photos/1190297/pexels-photo-1190297.jpeg'})`}}>
+                  <div style={cardContent}>
+                    <span style={badgeStyle}>
+                      {event.category ? event.category.toUpperCase() : 'EVENT'}
+                    </span>
+
+                    <h4 style={cardTitleStyle}>{event.title}</h4>
+
+                    <p style={cardInfoStyle}>
+                      📍 {event.location} · {new Date(event.date).toLocaleDateString('en-GB')}
+                    </p>
+
+                    <button 
+                      style={buyBtnStyle}
+                      onClick={() => handleBuyClick(event)}
+                    >
+                      Buy Ticket
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div style={emptyStateStyle}>
+                <p>No more upcoming events found.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* View All Events Button */}
+        {events.length > 4 && (
+          <Link href="/events" style={{ textDecoration: 'none' }}>
+            <button style={viewAllBtnStyle}>
+              View All Events
+            </button>
+          </Link>
+        )}
       </main>
+
+      {/* The Global Purchase Modal */}
+      <PurchaseModal 
+        event={selectedEvent} 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+      />
     </div>
   )
 }
 
-// --- Premium UI Styles from your HTML Reference ---
+// --- Premium UI Styles ---
 const containerStyle = { maxWidth: '480px', margin: '0 auto', background: '#fff', minHeight: '100vh' };
 
 const heroBannerStyle: React.CSSProperties = {
   margin: '16px', padding: '24px 20px', borderRadius: '32px', position: 'relative',
-  overflow: 'hidden', backgroundImage: "url('https://images.pexels.com/photos/114296/pexels-photo-114296.jpeg')",
-  backgroundSize: 'cover', backgroundPosition: 'center', color: 'white', minHeight: '220px'
+  overflow: 'hidden', backgroundSize: 'cover', backgroundPosition: 'center', color: 'white', minHeight: '220px'
 };
 
 const bannerOverlay: React.CSSProperties = {
@@ -76,18 +161,21 @@ const bannerOverlay: React.CSSProperties = {
 };
 
 const bannerContent: React.CSSProperties = { position: 'relative', zIndex: 2 };
-const bannerLabel = { fontSize: '0.8rem', textTransform: 'uppercase' as const, letterSpacing: '2px', opacity: 0.9, marginBottom: '8px' };
+const bannerLabel = { fontSize: '0.8rem', textTransform: 'uppercase' as const, letterSpacing: '2px', opacity: 0.9, marginBottom: '8px', fontWeight: 600 };
 const bannerTitle = { fontSize: '1.8rem', fontWeight: 800, lineHeight: 1.2, margin: '0 0 12px 0' };
 const bannerMeta = { display: 'flex', gap: '20px', fontWeight: 500, marginBottom: '20px', fontSize: '0.9rem' };
-const countdownStyle = { background: 'rgba(255,255,255,0.15)', padding: '8px 16px', borderRadius: '40px', display: 'inline-block', fontWeight: 600, backdropFilter: 'blur(4px)' };
 
-const sectionTitleStyle = { fontSize: '1.5rem', fontWeight: 700, margin: '24px 0 16px', letterSpacing: '-0.02em' };
+const heroActionRow = { display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' as const };
+const countdownStyle = { background: 'rgba(255,255,255,0.15)', padding: '10px 16px', borderRadius: '40px', display: 'inline-block', fontWeight: 600, backdropFilter: 'blur(4px)', fontSize: '0.9rem' };
+const heroBuyBtn = { background: '#fff', color: '#1a4a9e', border: 'none', padding: '10px 20px', borderRadius: '40px', fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' };
+
+const headerRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '24px 0 16px' };
+const sectionTitleStyle = { fontSize: '1.5rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', color: '#0f172a' };
 const gridStyle = { display: 'flex', flexDirection: 'column' as const, gap: '16px' };
 
 const cardStyle: React.CSSProperties = {
   borderRadius: '24px', overflow: 'hidden', position: 'relative', minHeight: '180px',
   display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-  backgroundImage: "url('https://images.pexels.com/photos/1190297/pexels-photo-1190297.jpeg')",
   backgroundSize: 'cover', backgroundPosition: 'center'
 };
 
@@ -101,8 +189,13 @@ const cardTitleStyle = { fontSize: '1.3rem', fontWeight: 800, margin: '0 0 4px 0
 const cardInfoStyle = { opacity: 0.9, fontSize: '0.85rem', margin: '0 0 12px 0' };
 
 const buyBtnStyle = {
-  background: 'white', color: '#2563eb', border: 'none', padding: '12px 20px',
-  borderRadius: '60px', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer'
+  background: 'white', color: '#2563eb', border: 'none', padding: '10px 20px',
+  borderRadius: '60px', fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer', marginTop: '8px'
+};
+
+const viewAllBtnStyle = {
+  width: '100%', padding: '16px', marginTop: '24px', borderRadius: '16px', border: '2px solid #e2e8f0', 
+  background: 'transparent', color: '#475569', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', transition: '0.2s'
 };
 
 const emptyStateStyle = { padding: '40px 20px', textAlign: 'center' as const, background: '#f8fafc', borderRadius: '24px', color: '#64748b', border: '1px dashed #cbd5e1' };
