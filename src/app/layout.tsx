@@ -36,9 +36,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* 2. SIDEBAR NAVIGATION */}
         <nav style={{ ...sidebarStyle, left: isOpen ? '0' : '-320px' }}>
-          <div style={sidebarHeader}>
-            <div style={{ fontWeight: 900, fontSize: '1.2rem' }}>
-               EVENT<span style={{ color: '#2563eb' }}>CORE</span>
+          
+          {/* UPDATED EVENTCORE AFRICA LIMITED BRANDING */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '32px', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+              <span style={{ fontWeight: 800, fontSize: '1.2rem', lineHeight: 1, color: '#0f172a' }}>
+                EVENTCORE
+              </span>
+              <span style={{ fontSize: '0.6rem', fontWeight: 700, letterSpacing: '1.5px', color: '#2563eb', marginTop: '2px' }}>
+                AFRICA LIMITED
+              </span>
+              <span style={{ fontSize: '0.45rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.5px', textTransform: 'uppercase', marginTop: '3px' }}>
+                A Digital Event Infrastructure
+              </span>
             </div>
             <button onClick={() => setIsOpen(false)} style={closeBtnStyle}>✕</button>
           </div>
@@ -48,7 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/events" onClick={() => setIsOpen(false)} style={navLinkStyle}>📅 Events</Link>
             <Link href="/booth" onClick={() => setIsOpen(false)} style={navLinkStyle}>🏪 Booth Agent</Link>
             <Link href="/scanner" onClick={() => setIsOpen(false)} style={navLinkStyle}>📷 Gate Scanner</Link>
-            
+
             {/* ADMIN DASHBOARD LINK (Highlighted for Admin usage) */}
             <Link 
               href="/admin" 
@@ -102,9 +112,7 @@ const overlayStyle: React.CSSProperties = {
   backdropFilter: 'blur(6px)', zIndex: 1000 
 };
 
-const sidebarHeader = { display: 'flex', justifyContent: 'space-between', marginBottom: '32px', alignItems: 'center' };
-
-const closeBtnStyle = { background: 'none', border: 'none', fontSize: '1.4rem', color: '#94a3b8', cursor: 'pointer' };
+const closeBtnStyle = { background: 'none', border: 'none', fontSize: '1.4rem', color: '#94a3b8', cursor: 'pointer', padding: 0, marginTop: '-4px' };
 
 const navLinkStyle = { 
   padding: '14px 18px', borderRadius: '16px', color: '#334155', 
