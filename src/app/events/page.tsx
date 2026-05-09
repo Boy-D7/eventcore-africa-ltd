@@ -49,7 +49,7 @@ export default function EventsPage() {
                   <div style={fallbackImage}>⚽ Match Day</div>
                 )}
               </div>
-              
+
               <div style={{ padding: '16px 16px 8px' }}>
                 <h3 style={eventTitle}>{event.title}</h3>
                 <div style={infoRow}>
@@ -59,13 +59,17 @@ export default function EventsPage() {
               </div>
             </Link>
 
-            {/* Direct Buy Button */}
+            {/* Buy Now Button Section */}
             <div style={{ padding: '0 16px 16px' }}>
-              <Link href={`/checkout/${event.id}`} style={{ textDecoration: 'none' }}>
-                <button style={buyBtnStyle}>
-                  Secure Ticket
-                </button>
-              </Link>
+              <button 
+                onClick={() => {
+                   // We will trigger the Purchase Modal here next!
+                   console.log("Opening purchase for:", event.title);
+                }} 
+                style={buyBtnStyle}
+              >
+                Buy Ticket Now
+              </button>
             </div>
           </div>
         )) : (
@@ -95,9 +99,7 @@ const imagePlaceholder = {
 };
 
 const imageStyle = { width: '100%', height: '100%', objectFit: 'cover' as const };
-
 const fallbackImage = { fontWeight: 800, color: '#94a3b8', fontSize: '1.2rem' };
-
 const eventTitle = { margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' };
 
 const infoRow = { 
@@ -111,13 +113,13 @@ const infoRow = {
 
 const buyBtnStyle = {
   width: '100%',
-  padding: '14px',
+  padding: '16px',
   borderRadius: '16px',
   border: 'none',
-  background: '#2563eb',
+  background: '#2563eb', // EventCore Blue
   color: '#fff',
   fontWeight: 800,
-  fontSize: '0.95rem',
+  fontSize: '1rem',
   cursor: 'pointer',
   transition: '0.2s ease',
   boxShadow: '0 4px 12px rgba(37,99,235,0.2)'
