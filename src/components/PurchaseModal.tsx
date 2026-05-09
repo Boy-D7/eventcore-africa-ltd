@@ -8,18 +8,20 @@ interface PurchaseModalProps {
     location: string;
     date: string;
     time: string;
-  } | null; // Allow it to be null
+  } | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
 export default function PurchaseModal({ event, isOpen, onClose }: PurchaseModalProps) {
   const [qty, setQty] = useState(1);
+  const [network, setNetwork] = useState<'mpamba' | 'airtel' | null>(null); // Track selection
+  const [phoneNumber, setPhoneNumber] = useState('');
   const ticketPrice = 5000;
 
-  // CRITICAL: If no event is selected or modal is closed, don't render anything
-  // This prevents the "Cannot read property 'title' of null" error
   if (!isOpen || !event) return null;
+
+  const totalAmount = qty * ticketPrice;
 
   return (
     <div style={overlay}>
@@ -43,18 +45,58 @@ export default function PurchaseModal({ event, isOpen, onClose }: PurchaseModalP
 
           <div style={totalRow}>
             <span>Total Amount</span>
-            <strong style={{ color: '#2563eb' }}>MK {(qty * ticketPrice).toLocaleString()}</strong>
+            <strong style={{ color: '#2563eb' }}>MK {totalAmount.toLocaleString()}</strong>
           </div>
 
           <div style={paymentSection}>
-            <p style={subLabel}>Select Payment Method</p>
+            <p style={subLabel}>Select Network</p>
             <div style={paymentGrid}>
-              <button style={payOption}>Mpamba</button>
-              <button style={payOption}>Airtel Money</button>
+              <button 
+                onClick={() => setNetwork('mpamba')}
+                style={{
+                  ...payOption,
+                  borderColor: network === 'mpamba' ? '#2563eb' : '#e2e8f0',
+                  backgroundColor: network === 'mpamba' ? '#eff6ff' : 'transparent',
+                  color: network === 'mpamba' ? '#2563eb' : '#0f172a'
+                }}
+              >
+                Mpamba
+              </button>
+              <button 
+                onClick={() => setNetwork('airtel')}
+                style={{
+                  ...payOption,
+                  borderColor: network === 'airtel' ? '#2563eb' : '#e2e8f0',
+                  backgroundColor: network === 'airtel' ? '#eff6ff' : 'transparent',
+                  color: network === 'airtel' ? '#2563eb' : '#0f172a'
+                }}
+              >
+                Airtel Money
+              </button>
+            </div>
+
+            {/* NEW: Number Input Field */}
+            <div style={{ marginTop: '16px' }}>
+              <p style={subLabel}>Phone Number</p>
+              <input 
+                type="tel"
+                placeholder="088... or 099..."
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                style={numberInput}
+              />
             </div>
           </div>
 
-          <button style={finalBuyBtn} onClick={() => alert('Processing Payment...')}>
+          <button 
+            disabled={!network || phoneNumber.length < 10}
+            style={{
+              ...finalBuyBtn,
+              opacity: (!network || phoneNumber.length < 10) ? 0.5 : 1,
+              backgroundColor: (!network || phoneNumber.length < 10) ? '#64748b' : '#0f172a'
+            }} 
+            onClick={() => alert(`Charging MK ${totalAmount} to ${phoneNumber} via ${network}`)}
+          >
             Pay Now
           </button>
         </div>
@@ -63,7 +105,7 @@ export default function PurchaseModal({ event, isOpen, onClose }: PurchaseModalP
   )
 }
 
-// --- Styles (Same as before) ---
+// --- Styles ---
 const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end', zIndex: 1000 };
 const modal: React.CSSProperties = { width: '100%', background: '#fff', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', padding: '24px', maxWidth: '480px', margin: '0 auto' };
 const header: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' };
@@ -75,7 +117,19 @@ const qtyControls = { display: 'flex', alignItems: 'center', gap: '15px' };
 const qtyBtn = { width: '30px', height: '30px', borderRadius: '50%', border: '1px solid #cbd5e1', background: '#fff', fontWeight: 800, cursor: 'pointer' };
 const totalRow = { display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 800, margin: '20px 0' };
 const paymentSection = { marginTop: '20px' };
-const subLabel = { fontSize: '0.75rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' as const, marginBottom: '12px' };
-const paymentGrid = { display: 'flex', gap: '10px', marginBottom: '24px' };
-const payOption = { flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid #e2e8f0', background: 'none', fontWeight: 700, cursor: 'pointer' };
-const finalBuyBtn = { width: '100%', padding: '18px', borderRadius: '18px', border: 'none', background: '#0f172a', color: '#fff', fontWeight: 800, fontSize: '1rem', cursor: 'pointer' };
+const subLabel = { fontSize: '0.75rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' as const, marginBottom: '8px' };
+const paymentGrid = { display: 'flex', gap: '10px' };
+const payOption = { flex: 1, padding: '14px', borderRadius: '14px', border: '2px solid #e2e8f0', fontWeight: 700, cursor: 'pointer', transition: '0.2s' };
+
+const numberInput = {
+  width: '100%',
+  padding: '16px',
+  borderRadius: '14px',
+  border: '1px solid #cbd5e1',
+  fontSize: '1rem',
+  boxSizing: 'border-box' as const,
+  outline: 'none',
+  marginTop: '4px'
+};
+
+const finalBuyBtn = { width: '100%', padding: '18px', borderRadius: '18px', border: 'none', color: '#fff', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', marginTop: '20px' };
